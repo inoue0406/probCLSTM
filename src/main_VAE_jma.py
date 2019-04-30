@@ -13,7 +13,7 @@ import time
 
 from jma_pytorch_dataset import *
 from regularizer import *
-from convolution_lstm_mod import *
+from vae_conv import *
 from train_valid_epoch import *
 from utils import Logger
 from opts import parse_opts
@@ -61,22 +61,17 @@ if __name__ == '__main__':
                                                    batch_size=opt.batch_size,
                                                    shuffle=False)
 
-        import pdb; pdb.set_trace()
-    
-        # ConvLSTM Encoder Predictor
-        convlstm = CLSTM_EP(input_channels=1, hidden_channels=opt.hidden_channels,
-                            kernel_size=opt.kernel_size).cuda()
+        # VAE with convolutional layers
+        vaemodel = VAE(input_channels=opt.tdim_use, hidden_channels=[16,32,64,64],
+                            kernel_size=opt.kernel_size,height=200,width=200).cuda()
         
-        # "feed-in" type of predictor
-        #convlstm = CLSTM_EP2(input_channels=1, hidden_channels=opt.hidden_channels,
-        #                    kernel_size=opt.kernel_size).cuda()
         loss_fn = torch.nn.MSELoss()
 
         # Type of optimizers adam/rmsprop
         if opt.optimizer == 'adam':
-            optimizer = torch.optim.Adam(convlstm.parameters(), lr=opt.learning_rate)
+            optimizer = torch.optim.Adam(vaemodel.parameters(), lr=opt.learning_rate)
         elif opt.optimizer == 'rmsprop':
-            optimizer = torch.optim.RMSprop(convlstm.parameters(), lr=opt.learning_rate)
+            optimizer = torch.optim.RMSprop(vaemodel.parameters(), lr=opt.learning_rate)
             
         # learning rate scheduler
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=opt.lr_decay)
@@ -97,16 +92,16 @@ if __name__ == '__main__':
             # step scheduler
             scheduler.step()
             # training & validation
-            train_epoch(epoch,opt.n_epochs,train_loader,convlstm,loss_fn,optimizer,
+            train_epoch(epoch,opt.n_epochs,train_loader,vaemodel,loss_fn,optimizer,
                         train_logger,train_batch_logger,opt,reg)
-            valid_epoch(epoch,opt.n_epochs,valid_loader,convlstm,loss_fn,
+            valid_epoch(epoch,opt.n_epochs,valid_loader,vaemodel,loss_fn,
                         valid_logger,opt,reg)
 
         # save the trained model
         # (1) as binary 
-        torch.save(convlstm,os.path.join(opt.result_path, 'trained_CLSTM.model'))
+        torch.save(vaemodel,os.path.join(opt.result_path, 'trained_CLSTM.model'))
         # (2) as state dictionary
-        torch.save(convlstm.state_dict(),
+        torch.save(vaemodel.state_dict(),
                    os.path.join(opt.result_path, 'trained_CLSTM.dict'))
 
     # test datasets if specified
@@ -115,7 +110,7 @@ if __name__ == '__main__':
             #load pretrained model from results directory
             model_fname = os.path.join(opt.result_path, 'trained_CLSTM.model')
             print('loading pretrained model:',model_fname)
-            convlstm = torch.load(model_fname)
+            vaemodel = torch.load(model_fname)
             loss_fn = torch.nn.MSELoss()
             
         # prepare loader
@@ -128,7 +123,7 @@ if __name__ == '__main__':
                                                    shuffle=False)
         
         # testing for the trained model
-        test_CLSTM_EP(test_loader,convlstm,loss_fn,opt,reg)
+        test_CLSTM_EP(test_loader,vaemodel,loss_fn,opt,reg)
 
     # output elapsed time
     logfile.write('End time: '+time.ctime()+'\n')

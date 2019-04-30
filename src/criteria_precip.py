@@ -14,20 +14,20 @@ def StatRainfall(Xtrue,Xmodel,th=0.5):
     Xt = rflag * Xtrue
     Xm = rflag * Xmodel
     SE = np.power(Xt - Xm,2)
-    SumSE = np.sum(SE,axis=(2,3,4))
+    SumSE = np.sum(SE,axis=(2,3))
     # ----------------------
     # calc hit,miss,falarm
     flg_tr = Xtrue > th
     flg_mo = Xmodel > th
     # cal hit/miss/falsealarm
-    hit    = np.sum(flg_tr * flg_mo     ,axis=(2,3,4))
-    miss   = np.sum(flg_tr * (1-flg_mo) ,axis=(2,3,4))
-    falarm = np.sum((1-flg_tr) * flg_mo ,axis=(2,3,4))
+    hit    = np.sum(flg_tr * flg_mo     ,axis=(2,3))
+    miss   = np.sum(flg_tr * (1-flg_mo) ,axis=(2,3))
+    falarm = np.sum((1-flg_tr) * flg_mo ,axis=(2,3))
     # ----------------------1
     # calc moments for correlation
-    m_xy     = np.sum(Xtrue*Xmodel ,axis=(2,3,4))
-    m_xx     = np.sum(Xtrue*Xtrue  ,axis=(2,3,4))
-    m_yy     = np.sum(Xmodel*Xmodel,axis=(2,3,4))
+    m_xy     = np.sum(Xtrue*Xmodel ,axis=(2,3))
+    m_xx     = np.sum(Xtrue*Xtrue  ,axis=(2,3))
+    m_yy     = np.sum(Xmodel*Xmodel,axis=(2,3))
     return(SumSE,hit,miss,falarm,m_xy,m_xx,m_yy)
 
 def MetricRainfall(SumSE,hit,miss,falarm,m_xy,m_xx,m_yy,axis=None):
@@ -80,10 +80,10 @@ def RainfallMSE(Xtrue,Xmodel,th=0.5):
     Xm = rflag * Xmodel
     SE = np.power(Xt - Xm,2)
     # count only for nonzero elements
-    N = np.sum(rflag,axis=(2,3,4))
+    N = np.sum(rflag,axis=(2,3))
     is_zero = (N==0) 
     N = N*(1-is_zero) + 9999*(is_zero) # for avoiding zero division
-    MSE = np.sum(SE,axis=(2,3,4))/N
+    MSE = np.sum(SE,axis=(2,3))/N
     return(MSE)
 
 # Critical Success Index (CSI) 
@@ -92,9 +92,9 @@ def CSI(Xtrue,Xmodel,th=0.5):
     flg_tr = Xtrue > th
     flg_mo = Xmodel > th
     # cal hit/miss/falsealarm
-    hit    = np.sum(flg_tr * flg_mo     ,axis=(2,3,4))
-    miss   = np.sum(flg_tr * (1-flg_mo) ,axis=(2,3,4))
-    falarm = np.sum((1-flg_tr) * flg_mo ,axis=(2,3,4))
+    hit    = np.sum(flg_tr * flg_mo     ,axis=(2,3))
+    miss   = np.sum(flg_tr * (1-flg_mo) ,axis=(2,3))
+    falarm = np.sum((1-flg_tr) * flg_mo ,axis=(2,3))
     # calc CSI
     denom = hit+miss+falarm
     is_zero = (denom==0)
@@ -108,8 +108,8 @@ def FAR(Xtrue,Xmodel,th=0.5):
     flg_tr = Xtrue > th
     flg_mo = Xmodel > th
     # cal hit/miss/falsealarm
-    hit    = np.sum(flg_tr * flg_mo     ,axis=(2,3,4))
-    falarm = np.sum((1-flg_tr) * flg_mo ,axis=(2,3,4))
+    hit    = np.sum(flg_tr * flg_mo     ,axis=(2,3))
+    falarm = np.sum((1-flg_tr) * flg_mo ,axis=(2,3))
     # calc FAR
     denom = hit+falarm
     is_zero = (denom==0)
@@ -123,8 +123,8 @@ def POD(Xtrue,Xmodel,th=0.5):
     flg_tr = Xtrue > th
     flg_mo = Xmodel > th
     # cal hit/miss/falsealarm
-    hit    = np.sum(flg_tr * flg_mo     ,axis=(2,3,4))
-    miss   = np.sum(flg_tr * (1-flg_mo) ,axis=(2,3,4))
+    hit    = np.sum(flg_tr * flg_mo     ,axis=(2,3))
+    miss   = np.sum(flg_tr * (1-flg_mo) ,axis=(2,3))
     # calc POD
     denom = hit+miss
     is_zero = (denom==0)
@@ -135,9 +135,9 @@ def POD(Xtrue,Xmodel,th=0.5):
 # Correlation
 def Correlation(Xtrue,Xmodel):
     # calc moments
-    m_xy     = np.sum(Xtrue*Xmodel ,axis=(2,3,4))
-    m_xx     = np.sum(Xtrue*Xtrue  ,axis=(2,3,4))
-    m_yy     = np.sum(Xmodel*Xmodel,axis=(2,3,4))
+    m_xy     = np.sum(Xtrue*Xmodel ,axis=(2,3))
+    m_xx     = np.sum(Xtrue*Xtrue  ,axis=(2,3))
+    m_yy     = np.sum(Xmodel*Xmodel,axis=(2,3))
     # calc Correlation
     eps = 0.0001 # small
     Cor = m_xy/(np.sqrt(m_xx*m_yy)+eps)
@@ -147,12 +147,11 @@ if __name__ == '__main__':
     # test with random sample data
     batch = 10
     tsize = 6
-    layer = 1
     width = 12
     height = 12
     #X <- np.zeros((width,height))
-    Xtrue = np.random.rand(batch,tsize,layer,width,height)
-    Xmodel = np.random.randn(batch,tsize,layer,width,height)
+    Xtrue = np.random.rand(batch,tsize,width,height)
+    Xmodel = np.random.randn(batch,tsize,width,height)
     
     Xtrue = np.abs(Xtrue)*0.60
     Xmodel = Xtrue + Xmodel*0.2

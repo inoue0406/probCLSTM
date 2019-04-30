@@ -3,6 +3,7 @@ import torchvision
 import numpy as np
 import torch.utils.data as data
 import torchvision.transforms as transforms
+from torch.nn import functional as F
 
 from jma_pytorch_dataset import *
 from regularizer import *
@@ -11,6 +12,18 @@ from utils import AverageMeter, Logger
 from criteria_precip import *
 
 # training/validation for one epoch
+
+# Reconstruction + KL divergence losses summed over all elements and batch
+def loss_function(recon_x, x, mu, logvar):
+    BCE = F.binary_cross_entropy(recon_x, x, reduction='sum')
+
+    # see Appendix B from VAE paper:
+    # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+    # https://arxiv.org/abs/1312.6114
+    # 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+    return BCE + KLD
 
 # --------------------------
 # Training
@@ -33,18 +46,18 @@ def train_epoch(epoch,num_epochs,train_loader,model,loss_fn,optimizer,train_logg
     
     for i_batch, sample_batched in enumerate(train_loader):
         #print(i_batch, sample_batched['past'].size(),
-        #    sample_batched['future'].size())
         input = Variable(reg.fwd(sample_batched['past'])).cuda()
         target = Variable(reg.fwd(sample_batched['future'])).cuda()
-        
+
         # Forward + Backward + Optimize
         optimizer.zero_grad()
-        output = model(input)
-        loss = loss_fn(output, target)
+        # loss for VAE
+        output, mu, logvar = model(input)
+        loss = loss_function(output, target, mu, logvar)
         loss.backward()
         optimizer.step()
         # for logging
-        losses.update(loss.data[0], input.size(0))
+        losses.update(loss.item(), input.size(0))
         # apply evaluation metric
         SumSE,hit,miss,falarm,m_xy,m_xx,m_yy = StatRainfall(reg.inv(target.data.cpu().numpy()),
                                                             reg.inv(output.data.cpu().numpy()),
@@ -75,7 +88,7 @@ def train_epoch(epoch,num_epochs,train_loader,model,loss_fn,optimizer,train_logg
         # 
         if (i_batch+1) % 1 == 0:
             print ('Train Epoch [%d/%d], Iter [%d/%d] Loss: %.4e' 
-                   %(epoch+1, num_epochs, i_batch+1, len(train_loader.dataset)//train_loader.batch_size, loss.data[0]))
+                   %(epoch+1, num_epochs, i_batch+1, len(train_loader.dataset)//train_loader.batch_size, loss.item()))
 
     # update lr for optimizer
     optimizer.step()
@@ -119,14 +132,15 @@ def valid_epoch(epoch,num_epochs,valid_loader,model,loss_fn,valid_logger,opt,reg
 
     for i_batch, sample_batched in enumerate(valid_loader):
         input = Variable(reg.fwd(sample_batched['past'])).cuda()
-        target = Variable(reg.fwd(sample_batched['future'])).cuda()
+        #target = Variable(reg.fwd(sample_batched['future'])).cuda()
+        target = Variable(reg.fwd(sample_batched['past'])).cuda() # If in VAE
         
-        # Forward
-        output = model(input)
-        loss = loss_fn(output, target)
+        # loss for VAE
+        output, mu, logvar = model(input)
+        loss = loss_function(output, target, mu, logvar)
 
         # for logging
-        losses.update(loss.data[0], input.size(0))
+        losses.update(loss.item(), input.size(0))
         
         # apply evaluation metric
         SumSE,hit,miss,falarm,m_xy,m_xx,m_yy = StatRainfall(reg.inv(target.data.cpu().numpy()),
@@ -143,7 +157,7 @@ def valid_epoch(epoch,num_epochs,valid_loader,model,loss_fn,valid_logger,opt,reg
         #if (i_batch+1) % 100 == 0:
         if (i_batch+1) % 1 == 0:
             print ('Valid Epoch [%d/%d], Iter [%d/%d] Loss: %.4e' 
-                   %(epoch+1, num_epochs, i_batch+1, len(valid_loader.dataset)//valid_loader.batch_size, loss.data[0]))
+                   %(epoch+1, num_epochs, i_batch+1, len(valid_loader.dataset)//valid_loader.batch_size, loss.item()))
     # logging for epoch-averaged loss
     RMSE,CSI,FAR,POD,Cor = MetricRainfall(SumSE_all,hit_all,miss_all,falarm_all,
                                           m_xy_all,m_xx_all,m_yy_all,axis=None)
@@ -182,11 +196,12 @@ def test_CLSTM_EP(test_loader,model,loss_fn,opt,reg):
 
     for i_batch, sample_batched in enumerate(test_loader):
         input = Variable(reg.fwd(sample_batched['past'])).cuda()
-        target = Variable(reg.fwd(sample_batched['future'])).cuda()
+        #target = Variable(reg.fwd(sample_batched['future'])).cuda()
+        target = Variable(reg.fwd(sample_batched['past'])).cuda() # for VAE
         
-        # Forward
-        output = model(input)
-        loss = loss_fn(output, target)
+        # loss for VAE
+        output, mu, logvar = model(input)
+        loss = loss_function(output, target, mu, logvar)
         
         # apply evaluation metric
         SumSE,hit,miss,falarm,m_xy,m_xx,m_yy = StatRainfall(reg.inv(target.data.cpu().numpy()),
@@ -203,7 +218,7 @@ def test_CLSTM_EP(test_loader,model,loss_fn,opt,reg):
         #if (i_batch+1) % 100 == 0:
         if (i_batch+1) % 1 == 0:
             print ('Test Iter [%d/%d] Loss: %.4e' 
-                   %(i_batch+1, len(test_loader.dataset)//test_loader.batch_size, loss.data[0]))
+                   %(i_batch+1, len(test_loader.dataset)//test_loader.batch_size, loss.item()))
     # logging for epoch-averaged loss
     RMSE,CSI,FAR,POD,Cor = MetricRainfall(SumSE_all,hit_all,miss_all,falarm_all,
                                           m_xy_all,m_xx_all,m_yy_all,axis=(0))
@@ -220,8 +235,3 @@ def test_CLSTM_EP(test_loader,model,loss_fn,opt,reg):
                            'test_evaluation_predtime_%.2f.csv' % opt.eval_threshold))
     # free gpu memory
     del input,target,output,loss
-
-    
-
-
-    
