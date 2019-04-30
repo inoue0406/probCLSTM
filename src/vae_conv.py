@@ -13,53 +13,53 @@ from torchvision.utils import save_image
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class VAE(nn.Module):
-    def __init__(self, input_channels, hidden_channels, kernel_size, height, width, z_dimension):
+    def __init__(self, input_channels, hidden_channels, kernel_size, height, width):
         super(VAE, self).__init__()
 
-        #hidden_channels = [16,32,64,64]
         self.height = height
         self.width = width
-        self.z_dimension = z_dimension
         self.hidden_channels = hidden_channels
+        self.zdim = (self.height//32+1)*(self.width//32+1)
+        print('Dim of z:',self.zdim)
 
         # Encoder Architecture
         self.conv1 = nn.Conv2d(in_channels=input_channels, out_channels=hidden_channels[0],
-                               kernel_size=kernel_size, padding=0, stride=2)
+                               kernel_size=kernel_size, padding=1, stride=2)
         self.bn1 = nn.BatchNorm2d(hidden_channels[0])
         self.conv2 = nn.Conv2d(in_channels=hidden_channels[0], out_channels=hidden_channels[1],
-                               kernel_size=kernel_size, padding=0, stride=2)
+                               kernel_size=kernel_size, padding=1, stride=2)
         self.bn2 = nn.BatchNorm2d(hidden_channels[1])
         self.conv3 = nn.Conv2d(in_channels=hidden_channels[1], out_channels=hidden_channels[2],
-                               kernel_size=kernel_size, padding=0, stride=2)
+                               kernel_size=kernel_size, padding=1, stride=2)
         self.bn3 = nn.BatchNorm2d(hidden_channels[2])
         self.conv4 = nn.Conv2d(in_channels=hidden_channels[2], out_channels=hidden_channels[3],
-                               kernel_size=kernel_size, padding=0, stride=2)
+                               kernel_size=kernel_size, padding=1, stride=2)
         self.bn4 = nn.BatchNorm2d(hidden_channels[3])
+        # Convolution for mu and sigma
+        self.conv5_mu = nn.Conv2d(in_channels=hidden_channels[3], out_channels=1,
+                               kernel_size=kernel_size, padding=1, stride=2)
+        self.bn5_mu = nn.BatchNorm2d(1)
+        self.conv5_sig = nn.Conv2d(in_channels=hidden_channels[3], out_channels=1,
+                               kernel_size=kernel_size, padding=1, stride=2)
+        self.bn5_sig = nn.BatchNorm2d(1)
 
-        self.hidden = (self.height//16)*(self.width//16)*hidden_channels[3]
-        print('Dim of in_features:',self.hidden)
-        # Size of input features = HxWx2C
-        #self.linear1 = nn.Linear(in_features=self.height//16*self.width//16*hidden_channels[3],
-        #                         out_features=self.hidden)
-        #self.bn_l = nn.BatchNorm1d(self.hidden)
-        self.latent_mu = nn.Linear(in_features=self.hidden, out_features=self.z_dimension)
-        self.latent_logvar = nn.Linear(in_features=self.hidden, out_features=self.z_dimension)
         self.relu = nn.ReLU(inplace=True)
 
         # Decoder Architecture
-        self.linear1_decoder = nn.Linear(in_features=self.z_dimension,
-                                         out_features=self.hidden)
-        self.conv5 = nn.ConvTranspose2d(in_channels=hidden_channels[3], out_channels=hidden_channels[2],
-                                        kernel_size=kernel_size, stride=2, padding=0)
-        self.bn5 = nn.BatchNorm2d(hidden_channels[2])
-        self.conv6  = nn.ConvTranspose2d(in_channels=hidden_channels[2],  out_channels=hidden_channels[1],
-                                         kernel_size=kernel_size, stride=2, padding=0)
-        self.bn6 = nn.BatchNorm2d(hidden_channels[1])
-        self.conv7 = nn.ConvTranspose2d(in_channels=hidden_channels[1], out_channels=hidden_channels[0],
-                                        kernel_size=kernel_size, stride=2, padding=0)
-        self.bn7 = nn.BatchNorm2d(hidden_channels[0])
-        self.output = nn.ConvTranspose2d(in_channels=hidden_channels[0], out_channels=input_channels,
-                                         kernel_size=kernel_size, stride=2, padding=0)
+        self.deconv5 = nn.ConvTranspose2d(in_channels=1, out_channels=hidden_channels[3],
+                                        kernel_size=kernel_size, stride=2, padding=1)
+        self.dbn5 = nn.BatchNorm2d(hidden_channels[2])
+        self.deconv4 = nn.ConvTranspose2d(in_channels=hidden_channels[3], out_channels=hidden_channels[2],
+                                        kernel_size=kernel_size, stride=2, padding=1)
+        self.dbn4 = nn.BatchNorm2d(hidden_channels[2])
+        self.deconv3  = nn.ConvTranspose2d(in_channels=hidden_channels[2],  out_channels=hidden_channels[1],
+                                           kernel_size=2, stride=2, padding=0)
+        self.dbn3 = nn.BatchNorm2d(hidden_channels[1])
+        self.deconv2 = nn.ConvTranspose2d(in_channels=hidden_channels[1], out_channels=hidden_channels[0],
+                                          kernel_size=2, stride=2, padding=0)
+        self.dbn2 = nn.BatchNorm2d(hidden_channels[0])
+        self.deconv1 = nn.ConvTranspose2d(in_channels=hidden_channels[0], out_channels=input_channels,
+                                          kernel_size=2, stride=2, padding=0)
 
         # Define the leaky relu activation function
         self.l_relu = nn.LeakyReLU(0.1)
@@ -82,11 +82,19 @@ class VAE(nn.Module):
         conv4 = self.conv4(conv3)
         conv4 = self.bn4(conv4)
         conv4 = self.l_relu(conv4)
-        
-        fl = conv4.view((bs, -1))
-        
-        mu = self.latent_mu(fl)
-        logvar = self.latent_logvar(fl)
+
+        # calc mu and sigma
+        conv5_mu = self.conv5_mu(conv4)
+        conv5_mu = self.bn5_mu(conv5_mu)
+        conv5_mu = self.l_relu(conv5_mu)
+        #
+        conv5_sig = self.conv5_sig(conv4)
+        conv5_sig = self.bn5_sig(conv5_sig)
+        conv5_sig = self.l_relu(conv5_sig)
+
+        # flatten
+        mu = conv5_mu.view((bs, -1))
+        logvar = conv5_sig.view((bs, -1))
         
         #self.skip_values['conv1'] = conv1
         #self.skip_values['conv2'] = conv2
@@ -102,30 +110,32 @@ class VAE(nn.Module):
 
     def decode(self, z):
         # Decoding the image from the latent vector
-        z = self.linear1_decoder(z)
-        z = self.l_relu(z)
-        z = z.view((-1, self.hidden_channels[3], self.height//16, self.width//16))
-        z = self.conv5(z)
+        z = z.view((-1, 1, self.height//32+1, self.width//32+1))
+        #
+        z = self.deconv5(z)
         z = self.l_relu(z)
         ## Add skip connections
         #z = torch.cat([z, self.skip_values['conv3']])
-    
-        z = self.conv6(z)
+        #
+        z = self.deconv4(z)
         z = self.l_relu(z)
         ## Add skip connections
-        #z = torch.cat([z, self.skip_values['conv2']])
-        
-        z = self.conv7(z)
+        #z = torch.cat([z, self.skip_values['conv3']])
+        #
+        z = self.deconv3(z)
         z = self.l_relu(z)
         ## Add skip connections
-        # z = torch.cat([z, self.skip_values['conv1']])
+        #z = torch.cat([z, self.skip_values['conv3']])
+        #
+        z = self.deconv2(z)
+        z = self.l_relu(z)
+        ## Add skip connections
+        #z = torch.cat([z, self.skip_values['conv3']])
         
-        output = self.output(z)
+        output = self.deconv1(z)
         output = self.sigmoid_output(output)
         
         return output
-        h3 = F.relu(self.fc3(z))
-        return torch.sigmoid(self.fc4(h3))
 
     def forward(self, x):
         mu, logvar = self.encode(x)
@@ -135,16 +145,19 @@ class VAE(nn.Module):
 if __name__ == '__main__':
     # gradient check
     vaemodel = VAE(input_channels=12, hidden_channels=[16,32,64,64], kernel_size=3,
-                   height=200, width=200, z_dimension=100).cuda()
+                   height=200, width=200).cuda()
     print('VAE model structure ----------------')
     print(vaemodel)
     loss_fn = torch.nn.MSELoss()
 
-    input = (torch.randn(1, 12, 200, 200)).cuda()
-    #target = Variable(torch.randn(1, 32, 64, 32)).cuda()
+    input  = torch.randn(1, 12, 200, 200).cuda()
+    target = torch.randn(1, 12, 200, 200).cuda()
+
+    print('VAE number of parameters ----------------')
+    for parameter in vaemodel.parameters():
+        print(parameter.numel())
                      
-    output = vaemodel(input)
-    import pdb; pdb.set_trace()
-    #output = output[0][0]
+    output,mu,logvar = vaemodel(input)
+    #import pdb; pdb.set_trace()
     #res = torch.autograd.gradcheck(loss_fn, (output, target), raise_exception=True)
-    #print(res)
+    print(res)
