@@ -179,7 +179,7 @@ def valid_epoch(epoch,num_epochs,valid_loader,model,loss_fn,valid_logger,opt,reg
 # Test
 # --------------------------
 
-def test_CLSTM_EP(test_loader,model,loss_fn,opt,reg):
+def test_trained_model(test_loader,model,loss_fn,opt,reg):
     print('Testing for the model')
     
     # initialize

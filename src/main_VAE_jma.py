@@ -99,16 +99,16 @@ if __name__ == '__main__':
 
         # save the trained model
         # (1) as binary 
-        torch.save(vaemodel,os.path.join(opt.result_path, 'trained_CLSTM.model'))
+        torch.save(vaemodel,os.path.join(opt.result_path, 'trained_VAE.model'))
         # (2) as state dictionary
         torch.save(vaemodel.state_dict(),
-                   os.path.join(opt.result_path, 'trained_CLSTM.dict'))
+                   os.path.join(opt.result_path, 'trained_VAE.dict'))
 
     # test datasets if specified
     if opt.test:
         if opt.no_train:
             #load pretrained model from results directory
-            model_fname = os.path.join(opt.result_path, 'trained_CLSTM.model')
+            model_fname = os.path.join(opt.result_path, 'trained_VAE.model')
             print('loading pretrained model:',model_fname)
             vaemodel = torch.load(model_fname)
             loss_fn = torch.nn.MSELoss()
@@ -123,7 +123,7 @@ if __name__ == '__main__':
                                                    shuffle=False)
         
         # testing for the trained model
-        test_CLSTM_EP(test_loader,vaemodel,loss_fn,opt,reg)
+        test_trained_model(test_loader,vaemodel,loss_fn,opt,reg)
 
     # output elapsed time
     logfile.write('End time: '+time.ctime()+'\n')
