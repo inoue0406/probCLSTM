@@ -65,8 +65,6 @@ if __name__ == '__main__':
         vaemodel = VAE(input_channels=opt.tdim_use, hidden_channels=[16,32,64,64],
                             kernel_size=opt.kernel_size,height=200,width=200).cuda()
         
-        loss_fn = torch.nn.MSELoss()
-
         # Type of optimizers adam/rmsprop
         if opt.optimizer == 'adam':
             optimizer = torch.optim.Adam(vaemodel.parameters(), lr=opt.learning_rate)
@@ -92,9 +90,9 @@ if __name__ == '__main__':
             # step scheduler
             scheduler.step()
             # training & validation
-            train_epoch(epoch,opt.n_epochs,train_loader,vaemodel,loss_fn,optimizer,
+            train_epoch(epoch,opt.n_epochs,train_loader,vaemodel,optimizer,
                         train_logger,train_batch_logger,opt,reg)
-            valid_epoch(epoch,opt.n_epochs,valid_loader,vaemodel,loss_fn,
+            valid_epoch(epoch,opt.n_epochs,valid_loader,vaemodel,
                         valid_logger,opt,reg)
 
         # save the trained model
@@ -111,7 +109,6 @@ if __name__ == '__main__':
             model_fname = os.path.join(opt.result_path, 'trained_VAE.model')
             print('loading pretrained model:',model_fname)
             vaemodel = torch.load(model_fname)
-            loss_fn = torch.nn.MSELoss()
             
         # prepare loader
         test_dataset = JMARadarDataset(root_dir=opt.data_path,
@@ -123,7 +120,7 @@ if __name__ == '__main__':
                                                    shuffle=False)
         
         # testing for the trained model
-        test_trained_model(test_loader,vaemodel,loss_fn,opt,reg)
+        test_trained_model(test_loader,vaemodel,opt,reg)
 
     # output elapsed time
     logfile.write('End time: '+time.ctime()+'\n')

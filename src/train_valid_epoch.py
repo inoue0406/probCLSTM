@@ -29,7 +29,7 @@ def loss_function(recon_x, x, mu, logvar):
 # Training
 # --------------------------
 
-def train_epoch(epoch,num_epochs,train_loader,model,loss_fn,optimizer,train_logger,train_batch_logger,opt,reg):
+def train_epoch(epoch,num_epochs,train_loader,model,optimizer,train_logger,train_batch_logger,opt,reg):
     
     print('train at epoch {}'.format(epoch+1))
 
@@ -113,7 +113,7 @@ def train_epoch(epoch,num_epochs,train_loader,model,loss_fn,optimizer,train_logg
 # Validation
 # --------------------------
 
-def valid_epoch(epoch,num_epochs,valid_loader,model,loss_fn,valid_logger,opt,reg):
+def valid_epoch(epoch,num_epochs,valid_loader,model,valid_logger,opt,reg):
     print('validation at epoch {}'.format(epoch+1))
     
     losses = AverageMeter()
@@ -179,7 +179,7 @@ def valid_epoch(epoch,num_epochs,valid_loader,model,loss_fn,valid_logger,opt,reg
 # Test
 # --------------------------
 
-def test_trained_model(test_loader,model,loss_fn,opt,reg):
+def test_trained_model(test_loader,model,opt,reg):
     print('Testing for the model')
     
     # initialize
@@ -191,8 +191,18 @@ def test_trained_model(test_loader,model,loss_fn,opt,reg):
     m_xx_all = np.empty((0,opt.tdim_use),float)
     m_yy_all = np.empty((0,opt.tdim_use),float)
 
+    # ----------------------------------------
     # evaluation mode
     model.eval()
+    
+    # -----------------------------------------
+    # for VAE: generate random sample from VAE
+    with torch.no_grad():
+        sample = torch.randn(10, 49).cuda()
+        sample = model.decode(sample).cpu()
+        #save_image(sample.view(64, 1, 28, 28),
+        #           'results/sample_' + str(epoch) + '.png')
+    import pdb; pdb.set_trace()
 
     for i_batch, sample_batched in enumerate(test_loader):
         input = Variable(reg.fwd(sample_batched['past'])).cuda()
