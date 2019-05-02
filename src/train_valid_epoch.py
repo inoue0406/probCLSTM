@@ -11,6 +11,12 @@ from convolution_lstm_mod import *
 from utils import AverageMeter, Logger
 from criteria_precip import *
 
+# add "src_post" as import path
+import sys
+path = os.path.join('../src_post')
+sys.path.append(path)
+from plot_rainfall_map import *
+
 # training/validation for one epoch
 
 # Reconstruction + KL divergence losses summed over all elements and batch
@@ -198,10 +204,13 @@ def test_trained_model(test_loader,model,opt,reg):
     # -----------------------------------------
     # for VAE: generate random sample from VAE
     with torch.no_grad():
-        sample = torch.randn(10, 49).cuda()
-        sample = model.decode(sample).cpu()
-        #save_image(sample.view(64, 1, 28, 28),
-        #           'results/sample_' + str(epoch) + '.png')
+        for n in range(1000):
+            sample = torch.randn(1, 49).cuda()
+            sample = model.decode(sample).cpu()*201
+            vmax = sample.max().item() # calc max for each batch
+            if vmax > 3.0:
+                print('random sample: n,max(mm/h)=',n,vmax)
+                plot_rainfall_map(sample.numpy()[0,:,:,:],'random_sample_'+str(n),opt.result_path)
     import pdb; pdb.set_trace()
 
     for i_batch, sample_batched in enumerate(test_loader):
@@ -234,7 +243,6 @@ def test_trained_model(test_loader,model,opt,reg):
                                           m_xy_all,m_xx_all,m_yy_all,axis=(0))
     # save evaluated metric as csv file
     tpred = (np.arange(opt.tdim_use)+1.0)*5.0 # in minutes
-    # import pdb; pdb.set_trace()
     df = pd.DataFrame({'tpred_min':tpred,
                        'RMSE':RMSE,
                        'CSI':CSI,
