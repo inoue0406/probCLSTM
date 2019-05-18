@@ -64,6 +64,9 @@ def train_epoch(epoch,num_epochs,train_loader,model,optimizer,train_logger,train
         optimizer.step()
         # for logging
         losses.update(loss.item(), input.size(0))
+        # TEMP : stop when loss is abnormal
+        if loss.item() > 1e10:
+            import pdb; pdb.set_trace()
         # apply evaluation metric
         SumSE,hit,miss,falarm,m_xy,m_xx,m_yy = StatRainfall(reg.inv(target.data.cpu().numpy()),
                                                             reg.inv(output.data.cpu().numpy()),
@@ -211,7 +214,6 @@ def test_trained_model(test_loader,model,opt,reg):
             if vmax > 3.0:
                 print('random sample: n,max(mm/h)=',n,vmax)
                 plot_rainfall_map(sample.numpy()[0,:,:,:],'random_sample_'+str(n),opt.result_path)
-    import pdb; pdb.set_trace()
 
     for i_batch, sample_batched in enumerate(test_loader):
         input = Variable(reg.fwd(sample_batched['past'])).cuda()
